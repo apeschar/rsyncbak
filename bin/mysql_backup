@@ -1,0 +1,27 @@
+#!/bin/bash
+
+set -euo pipefail
+app="$(dirname "$0")/.."
+source "$app/etc/rsync_backup"
+
+tmp="$(mktemp -d)"
+trap "cd /; rm -rf '$tmp'" EXIT
+chmod 700 "$tmp"
+
+cd "$tmp"
+
+fail=0
+
+echo show databases | mysql --skip-column-names | while read db; do
+    [[ $db = "performance_schema" ]] && continue
+    [[ $db = "information_schema" ]] && continue
+    if ! mysqldump --order-by-primary --single-transaction --routines "$db" > "$db".sql; then
+        fail=1
+    fi
+done
+
+rsync ${rsync_opts} -az --delete ./ "${dest}mysql/"
+
+if [[ $fail -eq 1 ]]; then
+    exit 1
+fi

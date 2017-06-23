@@ -1,0 +1,6 @@
+/root/.cache
+/swapfile
+/tmp
+/var/cache
+/var/lib/mysql
+/var/tmp

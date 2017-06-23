@@ -1,0 +1,2 @@
+0 0 * * * bash -c 'sleep $(($RANDOM\%120))m' && ~/opt/rsyncbak/bin/rsync_backup
+0 0 * * * bash -c 'sleep $(($RANDOM\%120))m' && ~/opt/rsyncbak/bin/mysql_backup

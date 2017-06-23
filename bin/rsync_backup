@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -euo pipefail
+app="$(cd "$(dirname "$0")/.." && pwd)"
+source "$app/etc/rsync_backup"
+
+cd /
+
+rsync \
+    $rsync_opts \
+    -a --rsync-path="rsync --fake-super" \
+    --delete --delete-excluded \
+    --one-file-system \
+    --exclude-from "$app/etc/rsync_exclude" \
+    / "${dest}mirror/"
