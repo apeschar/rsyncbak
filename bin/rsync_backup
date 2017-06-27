@@ -6,7 +6,7 @@ source "$app/etc/rsync_backup"
 
 cd /
 
-rsync \
+"$app/bin/rsync-no-vanished" \
     $rsync_opts \
     -a --rsync-path="rsync --fake-super" \
     --delete --delete-excluded \
