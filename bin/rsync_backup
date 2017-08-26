@@ -8,7 +8,7 @@ cd /
 
 "$app/bin/rsync-no-vanished" \
     $rsync_opts \
-    -a --rsync-path="rsync --fake-super" \
+    -a --numeric-ids --rsync-path="rsync --fake-super" \
     --delete --delete-excluded \
     --one-file-system \
     --exclude-from "$app/etc/rsync_exclude" \
