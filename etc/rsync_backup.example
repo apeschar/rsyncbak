@@ -1,5 +1,6 @@
-hostname=$( hostname )
-dest=${hostname%%.*}@noah.kibohost.com:
+_hostname=$( hostname )
+
+dest=${_hostname%%.*}@noah.kibohost.com:
 
 if [ -t 1 ]; then
     rsync_opts="-v --progress"
