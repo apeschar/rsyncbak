@@ -25,7 +25,7 @@ echo show databases | mysql --skip-column-names | while read db; do
     fi
 done
 
-rsync ${rsync_opts} -az --delete ./ "${dest}mysql/"
+rsync ${rsync_opts} -az --delete ./ "${dest}/mysql/"
 
 if [[ $fail -eq 1 ]]; then
     exit 1
