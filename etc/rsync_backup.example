@@ -1,9 +1,1 @@
-_hostname=$( hostname )
-
-dest=${_hostname%%.*}@noah.kibohost.com:
-
-if [ -t 1 ]; then
-    rsync_opts="-v --progress"
-else
-    rsync_opts=""
-fi
+dest=user@host:mirror

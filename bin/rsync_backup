@@ -1,21 +1,15 @@
 #!/bin/bash
 
 set -euo pipefail
-app="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$(dirname "$0")/.."
 
-rsync_opts=""
-if [[ -t 1 ]]; then
-    rsync_opts="-v"
-fi
+source "etc/rsync_backup.defaults"
+source "etc/rsync_backup"
 
-source "$app/etc/rsync_backup"
-
-cd /
-
-"$app/bin/rsync-no-vanished" \
+bin/rsync-no-vanished \
     $rsync_opts \
     -a --numeric-ids --rsync-path="rsync --fake-super" \
     --delete --delete-excluded \
     --one-file-system \
-    --exclude-from "$app/etc/rsync_exclude" \
+    --exclude-from etc/rsync_exclude \
     / "${dest}mirror/"

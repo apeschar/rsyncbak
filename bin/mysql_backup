@@ -2,11 +2,16 @@
 
 set -euo pipefail
 app="$(dirname "$0")/.."
+
+source "$app/etc/rsync_backup.defaults"
 source "$app/etc/rsync_backup"
 
 tmp="$(mktemp -d)"
-trap "cd /; rm -rf '$tmp'" EXIT
-chmod 700 "$tmp"
+cleanup() {
+    cd /
+    rm -rf "$tmp"
+}
+trap cleanup EXIT
 
 cd "$tmp"
 

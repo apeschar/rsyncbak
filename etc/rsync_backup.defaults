@@ -1,0 +1,4 @@
+rsync_opts=""
+if [[ -t 1 ]]; then
+    rsync_opts="-v"
+fi
