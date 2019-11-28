@@ -29,7 +29,7 @@ fi
 cp "$pubkey" "$tmp/authorized_keys"
 chmod 400 "$tmp/authorized_keys"
 
-rsync -e 'ssh -o StrictHostKeyChecking=no' -a --ignore-existing \
+rsync -e 'ssh -o StrictHostKeyChecking=no' -r --ignore-existing \
       "$tmp/" "$uid@$backup_host:.ssh"
 
 if ! ssh -o ControlPath=none -o PasswordAuthentication=no "$uid@$backup_host" ls -l; then
