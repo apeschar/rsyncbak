@@ -2,6 +2,12 @@
 
 set -euo pipefail
 app="$(cd "$(dirname "$0")/.." && pwd)"
+
+rsync_opts=""
+if [[ -t 1 ]]; then
+    rsync_opts="-v"
+fi
+
 source "$app/etc/rsync_backup"
 
 cd /
