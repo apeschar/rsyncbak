@@ -52,6 +52,6 @@ if [[ -f $conf ]]; then
     exit 1
 fi
 
-echo "dest=$uid@$backup_host:mirror" >"$conf"
+echo "dest=$uid@$backup_host:" >"$conf"
 
 echo "ok" >&2
