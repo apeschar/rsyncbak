@@ -54,6 +54,4 @@ fi
 
 echo "dest=$uid@$backup_host:mirror" >"$conf"
 
-echo "$my_host" | ssh "$uid@$backup_host" dd of=host
-
 echo "ok" >&2
