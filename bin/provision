@@ -1,0 +1,59 @@
+#!/bin/bash
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+backup_host=ch-s012.rsync.net
+my_host="$(hostname)"
+privkey="$HOME/.ssh/id_ed25519"
+pubkey="$privkey.pub"
+conf="etc/rsync_backup"
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage: $0 <uid>" >&2
+    exit 1
+fi
+
+uid="$1"
+
+tmp="$(mktemp -d)"
+cleanup() {
+    rm -rf "$tmp"
+}
+trap cleanup EXIT
+
+if [[ ! -f $pubkey ]]; then
+    ssh-keygen -q -N '' -t ed25519 -f "$privkey"
+fi
+
+cp "$pubkey" "$tmp/authorized_keys"
+chmod 400 "$tmp/authorized_keys"
+
+rsync -e 'ssh -o StrictHostKeyChecking=no' -a --ignore-existing \
+      "$tmp/" "$uid@$backup_host:.ssh"
+
+if ! ssh -o ControlPath=none -o PasswordAuthentication=no "$uid@$backup_host" ls -l; then
+    echo "Failed to authenticate using pubkey?  Is this account used by another host?" >&2
+    exit 1
+fi
+
+echo "$my_host" >"$tmp/host"
+rsync --ignore-existing --chmod=0440 "$tmp/host" "$uid@$backup_host:host"
+
+other_host="$(ssh "$uid@$backup_host" cat host)"
+
+if [[ $other_host != $my_host ]]; then
+    echo "There's a host file for $other_host already..." >&2
+    exit 1
+fi
+
+if [[ -f $conf ]]; then
+    echo "Configuration exists already?" >&2
+    exit 1
+fi
+
+echo "dest=$uid@$backup_host:mirror" >"$conf"
+
+echo "$my_host" | ssh "$uid@$backup_host" dd of=host
+
+echo "ok" >&2
