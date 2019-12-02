@@ -6,6 +6,12 @@ cd "$(dirname "$0")/.."
 source "etc/rsync_backup.defaults"
 source "etc/rsync_backup"
 
+remote="${dest%%:*}"
+dir="${dest#*:}"
+if [[ $dir != "" ]]; then
+    dir="$dir/"
+fi
+
 bin/rsync-no-vanished \
     $rsync_opts \
     -a --numeric-ids --rsync-path="rsync --fake-super" \
@@ -13,3 +19,5 @@ bin/rsync-no-vanished \
     --one-file-system \
     --exclude-from etc/rsync_exclude \
     / "${dest}mirror/"
+
+ssh "$remote" "touch ${dir}mirror.ok"
