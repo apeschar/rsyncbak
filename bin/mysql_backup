@@ -6,26 +6,42 @@ app="$(dirname "$0")/.."
 source "$app/etc/rsync_backup.defaults"
 source "$app/etc/rsync_backup"
 
-tmp="$(mktemp -d)"
-cleanup() {
-    cd /
-    rm -rf "$tmp"
-}
-trap cleanup EXIT
-
-cd "$tmp"
+if [[ -t 1 ]] && command -v pv &>/dev/null; then
+    _pv() { pv "$@"; }
+else
+    _pv() { cat; }
+fi
 
 fail=0
 
-echo show databases | mysql --skip-column-names | while read db; do
+remote="${dest%%:*}"
+dir="${dest#*:}"
+if [[ $dir != "" ]]; then
+    dir="$dir/"
+fi
+
+IFS=$'\n' dbs=($(mysql -e 'show databases' --skip-column-names))
+
+ssh "$remote" "mkdir -p ${dir}mysql"
+
+for db in "${dbs[@]}"; do
     [[ $db = "performance_schema" ]] && continue
     [[ $db = "information_schema" ]] && continue
-    if ! mysqldump --order-by-primary --single-transaction --routines "$db" > "$db".sql; then
-        fail=1
+    path="${dir}mysql/${db}.sql.gz"
+    tmp="${dir}mysql/${db}.sql.gz.$$.tmp"
+    if mysqldump --order-by-primary --single-transaction --routines "$db" |
+         _pv -N "$db" | gzip | ssh "$remote" "dd of=$tmp status=none"; then
+        if ssh "$remote" "mv $tmp $path"; then
+            continue
+        fi
     fi
+    ssh "$remote" "rm -f $tmp" || true
+    fail=1
 done
 
-rsync ${rsync_opts} -az --delete ./ "${dest}mysql/"
+if [[ $fail -eq 0 ]]; then
+    ssh "$remote" "touch ${dir}mysql.ok" || fail=1
+fi
 
 if [[ $fail -eq 1 ]]; then
     exit 1
