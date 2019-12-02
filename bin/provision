@@ -27,7 +27,7 @@ if [[ ! -f $pubkey ]]; then
     ssh-keygen -q -N '' -t ed25519 -f "$privkey"
 fi
 
-if other_host="$($ssh "cat host")" && [[ $other_host != $my_host ]]; then
+if other_host="$($ssh "cat host" 2>/dev/null)" && [[ $other_host != $my_host ]]; then
     echo "Existing host file for $other_host found; aborting." >&2
     exit 1
 fi
