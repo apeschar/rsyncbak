@@ -22,7 +22,7 @@ fi
 
 IFS=$'\n' dbs=($(mysql -e 'show databases' --skip-column-names))
 
-ssh "$remote" "mkdir -p ${dir}mysql"
+ssh "$remote" "$(printf 'mkdir -p %q' "${dir}mysql")"
 
 for db in "${dbs[@]}"; do
     [[ $db = "performance_schema" ]] && continue
@@ -30,17 +30,17 @@ for db in "${dbs[@]}"; do
     path="${dir}mysql/${db}.sql.gz"
     tmp="${dir}mysql/${db}.sql.gz.$$.tmp"
     if mysqldump --order-by-primary --single-transaction --routines "$db" |
-         _pv -N "$db" | gzip | ssh "$remote" "dd of=$tmp status=none"; then
-        if ssh "$remote" "mv $tmp $path"; then
+         _pv -N "$db" | gzip | ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"; then
+        if ssh "$remote" "$(printf 'mv %q %q' "$tmp" "$path")"; then
             continue
         fi
     fi
-    ssh "$remote" "rm -f $tmp" || true
+    ssh "$remote" "$(printf 'rm -f %q' "$tmp")" || true
     fail=1
 done
 
 if [[ $fail -eq 0 ]]; then
-    ssh "$remote" "touch ${dir}mysql.ok" || fail=1
+    ssh "$remote" "$(printf 'touch %q' "${dir}mysql.ok")" || fail=1
 fi
 
 if [[ $fail -eq 1 ]]; then
