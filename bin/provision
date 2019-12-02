@@ -33,8 +33,8 @@ if other_host="$($ssh "cat host")" && [[ $other_host != $my_host ]]; then
 fi
 
 $ssh "mkdir -p .ssh"
-$ssh "dd of=.ssh/authorized_keys" <"$pubkey"
-$ssh "dd of=host" <<<"$my_host"
+$ssh "dd of=.ssh/authorized_keys status=none" <"$pubkey"
+$ssh "dd of=host status=none" <<<"$my_host"
 $ssh "chmod 440 host" <<<"$my_host"
 
 echo "dest=$remote:" >"$conf"
