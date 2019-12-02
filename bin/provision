@@ -15,43 +15,28 @@ if [[ $# -ne 1 ]]; then
 fi
 
 uid="$1"
-
-tmp="$(mktemp -d)"
-cleanup() {
-    rm -rf "$tmp"
-}
-trap cleanup EXIT
-
-if [[ ! -f $pubkey ]]; then
-    ssh-keygen -q -N '' -t ed25519 -f "$privkey"
-fi
-
-cp "$pubkey" "$tmp/authorized_keys"
-chmod 400 "$tmp/authorized_keys"
-
-rsync -e 'ssh -o StrictHostKeyChecking=no' -r --ignore-existing \
-      "$tmp/" "$uid@$backup_host:.ssh"
-
-if ! ssh -o ControlPath=none -o PasswordAuthentication=no "$uid@$backup_host" ls -l; then
-    echo "Failed to authenticate using pubkey?  Is this account used by another host?" >&2
-    exit 1
-fi
-
-echo "$my_host" >"$tmp/host"
-rsync --ignore-existing --chmod=0440 "$tmp/host" "$uid@$backup_host:host"
-
-other_host="$(ssh "$uid@$backup_host" cat host)"
-
-if [[ $other_host != $my_host ]]; then
-    echo "There's a host file for $other_host already..." >&2
-    exit 1
-fi
+remote="$uid@$backup_host"
+ssh="ssh -o StrictHostKeyChecking=no -o ControlPath=/tmp/ssh-%C -o ControlMaster=auto -o ControlPersist=60 $remote"
 
 if [[ -f $conf ]]; then
     echo "Configuration exists already?" >&2
     exit 1
 fi
 
-echo "dest=$uid@$backup_host:" >"$conf"
+if [[ ! -f $pubkey ]]; then
+    ssh-keygen -q -N '' -t ed25519 -f "$privkey"
+fi
+
+if other_host="$($ssh "cat host")" && [[ $other_host != $my_host ]]; then
+    echo "Existing host file for $other_host found; aborting." >&2
+    exit 1
+fi
+
+$ssh "mkdir -p .ssh"
+$ssh "dd of=.ssh/authorized_keys" <"$pubkey"
+$ssh "dd of=host" <<<"$my_host"
+$ssh "chmod 440 host" <<<"$my_host"
+
+echo "dest=$remote:" >"$conf"
 
 echo "ok" >&2
