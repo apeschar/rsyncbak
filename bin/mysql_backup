@@ -29,7 +29,7 @@ for db in "${dbs[@]}"; do
     [[ $db = "information_schema" ]] && continue
     path="${dir}mysql/${db}.sql.gz"
     tmp="${dir}mysql/${db}.sql.gz.$$.tmp"
-    if mysqldump --order-by-primary --single-transaction --routines "$db" |
+    if mysqldump --single-transaction --routines --events "$db" |
          _pv -N "$db" | gzip | ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"; then
         if ssh "$remote" "$(printf 'mv %q %q' "$tmp" "$path")"; then
             continue
