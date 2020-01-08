@@ -27,13 +27,27 @@ if [[ ! -f $pubkey ]]; then
     ssh-keygen -q -N '' -t ed25519 -f "$privkey"
 fi
 
+cat >&2 <<EOF
+Install SSH key with:
+
+if [[ \$(ssh rsync cat $uid/.ssh/authorized_keys) = '' ]]; then
+    ssh rsync dd of=$uid/.ssh/authorized_keys <<<"$(cat $pubkey)"
+else
+    echo 'Another key already exists?'
+    ssh rsync cat $uid/.ssh/authorized_keys
+fi
+
+Press ENTER to continue...
+EOF
+
+read -s
+
 if other_host="$($ssh "cat host" 2>/dev/null)" && [[ $other_host != $my_host ]]; then
     echo "Existing host file for $other_host found; aborting." >&2
     exit 1
 fi
 
 $ssh "mkdir -p .ssh"
-$ssh "dd of=.ssh/authorized_keys status=none" <"$pubkey"
 $ssh "dd of=host status=none" <<<"$my_host"
 $ssh "chmod 440 host" <<<"$my_host"
 
