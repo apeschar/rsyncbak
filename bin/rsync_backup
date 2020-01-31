@@ -13,6 +13,7 @@ if [[ $dir != "" ]]; then
 fi
 
 bin/rsync-no-vanished \
+    -e 'ssh -oConnectTimeout=10 -oConnectionAttempts=5' \
     $rsync_opts \
     -a --numeric-ids --rsync-path="rsync --fake-super" \
     --delete --delete-excluded \
