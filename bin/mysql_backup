@@ -22,7 +22,22 @@ fi
 
 IFS=$'\n' dbs=($(mysql -e 'show databases' --skip-column-names))
 
-ssh "$remote" "$(printf 'mkdir -p %q' "${dir}mysql")"
+ssh_tmp="$(mktemp -d)"
+ssh_socket="$ssh_tmp/conn"
+
+_ssh() {
+    ssh -o ConnectTimeout=10 -o ConnectionAttempts=5 -o ControlMaster=auto -o ControlPath="$ssh_socket" "$@"
+}
+
+cleanup() {
+    fuser -k "$ssh_socket" || true
+    rm -f "$ssh_socket" || true
+    rmdir "$ssh_tmp" || true
+}
+trap cleanup EXIT
+
+_ssh -f -N "$remote"
+_ssh "$remote" "$(printf 'mkdir -p %q' "${dir}mysql")"
 
 for db in "${dbs[@]}"; do
     [[ $db = "performance_schema" ]] && continue
@@ -30,17 +45,17 @@ for db in "${dbs[@]}"; do
     path="${dir}mysql/${db}.sql.gz"
     tmp="${dir}mysql/${db}.sql.gz.$$.tmp"
     if mysqldump --single-transaction --routines --events "$db" |
-         _pv -N "$db" | gzip | ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"; then
-        if ssh "$remote" "$(printf 'mv %q %q' "$tmp" "$path")"; then
+         _pv -N "$db" | gzip | _ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"; then
+        if _ssh "$remote" "$(printf 'mv %q %q' "$tmp" "$path")"; then
             continue
         fi
     fi
-    ssh "$remote" "$(printf 'rm -f %q' "$tmp")" || true
+    _ssh "$remote" "$(printf 'rm -f %q' "$tmp")" || true
     fail=1
 done
 
 if [[ $fail -eq 0 ]]; then
-    ssh "$remote" "$(printf 'touch %q' "${dir}mysql.ok")" || fail=1
+    _ssh "$remote" "$(printf 'touch %q' "${dir}mysql.ok")" || fail=1
 fi
 
 if [[ $fail -eq 1 ]]; then
