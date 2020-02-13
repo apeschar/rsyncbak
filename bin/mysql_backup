@@ -26,17 +26,30 @@ ssh_tmp="$(mktemp -d)"
 ssh_socket="$ssh_tmp/conn"
 
 _ssh() {
-    ssh -o ConnectTimeout=10 -o ConnectionAttempts=5 -o ControlMaster=auto -o ControlPath="$ssh_socket" "$@"
+    ssh \
+        -o ConnectTimeout=10 \
+        -o ConnectionAttempts=5 \
+        -o ControlMaster=auto \
+        -o ControlPath="$ssh_socket" \
+        -o BatchMode=yes \
+        "$@"
 }
 
 cleanup() {
-    fuser -k "$ssh_socket" || true
+    fuser -k "$ssh_socket" &>/dev/null || true
     rm -f "$ssh_socket" || true
     rmdir "$ssh_tmp" || true
 }
 trap cleanup EXIT
 
-_ssh -f -N "$remote"
+tries=3
+while ! _ssh -f -N "$remote"; do
+    if [[ $((--tries)) -le 0 ]]; then
+        exit 1
+    fi
+    sleep 60
+done
+
 _ssh "$remote" "$(printf 'mkdir -p %q' "${dir}mysql")"
 
 for db in "${dbs[@]}"; do
