@@ -1,10 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 backup_host=prio.ch-s012.rsync.net
-my_host="$(hostname --fqdn)"
+my_host="$(hostname -f)"
 privkey="$HOME/.ssh/id_ed25519"
 pubkey="$privkey.pub"
 conf="etc/rsync_backup"
