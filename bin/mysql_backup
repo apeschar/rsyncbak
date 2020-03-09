@@ -6,11 +6,15 @@ app="$(dirname "$0")/.."
 source "$app/etc/rsync_backup.defaults"
 source "$app/etc/rsync_backup"
 
-available_space="$(df -m --output=avail /var/tmp | grep '[0-9]' | head -1)"
+available_space="$((`stat -f -c '%a*%S' .`/1024/1024))"
 buffer_size=$((available_space/100*80))
 
 if [[ $buffer_size -gt $((5*1024)) ]]; then
     buffer_size=$((5*1024))
+fi
+
+if [[ $(uname -i) = i386 ]] && [[ $buffer_size -gt 2047 ]]; then
+    buffer_size=2047
 fi
 
 if command -v mbuffer &>/dev/null; then
