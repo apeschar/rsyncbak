@@ -6,10 +6,35 @@ app="$(dirname "$0")/.."
 source "$app/etc/rsync_backup.defaults"
 source "$app/etc/rsync_backup"
 
-if [[ -t 1 ]] && command -v pv &>/dev/null; then
-    _pv() { pv "$@"; }
+available_space="$(df -m --output=avail /var/tmp | grep '[0-9]' | head -1)"
+buffer_size=$((available_space/100*80))
+
+if [[ $buffer_size -gt $((5*1024)) ]]; then
+    buffer_size=$((5*1024))
+fi
+
+if command -v mbuffer &>/dev/null; then
+    buffer() {
+        mbuffer -m ${buffer_size}M -t
+    }
+elif command -v pv &>/dev/null; then
+    echo "Warning: mbuffer is missing, falling back to pv" >&2
+    buffer() {
+        pv
+    }
 else
-    _pv() { cat; }
+    echo "Warning: mbuffer is missing, will not buffer transfer" >&2
+    buffer() {
+        cat
+    }
+fi
+
+if command -v pigz &>/dev/null; then
+    gzip() {
+        pigz "$@"
+    }
+else
+    echo "Install pigz to get faster compression..." >&2
 fi
 
 fail=0
@@ -37,6 +62,7 @@ _ssh() {
 }
 
 cleanup() {
+    pkill -f "$ssh_socket" &>/dev/null || true
     fuser -k "$ssh_socket" &>/dev/null || true
     rm -f "$ssh_socket" || true
     rmdir "$ssh_tmp" || true
@@ -57,9 +83,11 @@ for db in "${dbs[@]}"; do
     [[ $db = "performance_schema" ]] && continue
     [[ $db = "information_schema" ]] && continue
     path="${dir}mysql/${db}.sql.gz"
-    tmp="${dir}mysql/${db}.sql.gz.$$.tmp"
-    if mysqldump --single-transaction --routines --events "$db" |
-         _pv -N "$db" | gzip | _ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"; then
+    tmp="${path}.$$.tmp"
+    echo "$db" >&2
+    if mysqldump --single-transaction --routines --events --no-autocommit "$db" |
+       gzip | buffer | _ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"
+    then
         if _ssh "$remote" "$(printf 'mv %q %q' "$tmp" "$path")"; then
             continue
         fi
@@ -70,6 +98,7 @@ done
 
 if [[ $fail -eq 0 ]]; then
     _ssh "$remote" "$(printf 'touch %q' "${dir}mysql.ok")" || fail=1
+    _ssh "$remote" "$(printf 'find %q -maxdepth 1 -type f -name "*.tmp" -mmin +1440 -delete' "${dir}mysql")" || fail=1
 fi
 
 if [[ $fail -eq 1 ]]; then
