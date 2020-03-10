@@ -18,8 +18,13 @@ if [[ $(uname -i) = i386 ]] && [[ $buffer_size -gt 2047 ]]; then
 fi
 
 if command -v mbuffer &>/dev/null; then
+    if [[ -t 1 ]]; then
+        mbuffer_flags=""
+    else
+        mbuffer_flags="-q"
+    fi
     buffer() {
-        mbuffer -m ${buffer_size}M -t
+        mbuffer -m ${buffer_size}M -t ${mbuffer_flags}
     }
 elif command -v pv &>/dev/null; then
     echo "Warning: mbuffer is missing, falling back to pv" >&2
@@ -88,7 +93,9 @@ for db in "${dbs[@]}"; do
     [[ $db = "information_schema" ]] && continue
     path="${dir}mysql/${db}.sql.gz"
     tmp="${path}.$$.tmp"
-    echo "$db" >&2
+    if [[ -t 1 ]]; then
+        echo "$db" >&2
+    fi
     if mysqldump --single-transaction --routines --events --no-autocommit "$db" |
        gzip | buffer | _ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"
     then
