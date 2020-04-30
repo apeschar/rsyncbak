@@ -1,5 +1,5 @@
 /root/.cache
-/swapfile
+/swap*
 /tmp
 /var/cache
 /var/lib/mysql
