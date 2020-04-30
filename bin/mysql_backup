@@ -6,7 +6,9 @@ app="$(dirname "$0")/.."
 source "$app/etc/rsync_backup.defaults"
 source "$app/etc/rsync_backup"
 
-available_space="$((`stat -f -c '%a*%S' .`/1024/1024))"
+export TMPDIR=/var/tmp
+
+available_space="$((`stat -f -c '%a*%S' "$TMPDIR"`/1024/1024))"
 buffer_size=$((available_space/100*80))
 
 if [[ $buffer_size -gt $((5*1024)) ]]; then
@@ -24,7 +26,7 @@ if command -v mbuffer &>/dev/null; then
         mbuffer_flags="-q"
     fi
     buffer() {
-        mbuffer -m ${buffer_size}M -t ${mbuffer_flags}
+        mbuffer -m ${buffer_size}M -s 2M -t ${mbuffer_flags}
     }
 elif command -v pv &>/dev/null; then
     echo "Warning: mbuffer is missing, falling back to pv" >&2
