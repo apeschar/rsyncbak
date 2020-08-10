@@ -1,0 +1,24 @@
+#!/bin/bash
+
+set -euo pipefail
+cd "$(dirname "$0")"
+
+install -v /dev/stdin /etc/systemd/system/rsyncbak.service <<-EOF
+	[Service]
+	Type=oneshot
+	ExecStart=$PWD/rsyncbak
+EOF
+
+install -v /dev/stdin /etc/systemd/system/rsyncbak.timer <<-EOF
+	[Timer]
+	OnCalendar=daily
+	RandomizedDelaySec=4h
+
+	[Install]
+	WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable rsyncbak.timer
+systemctl restart rsyncbak.timer
+systemctl status rsyncbak.timer
