@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 install -v /dev/stdin /etc/systemd/system/rsyncbak.service <<-EOF
 	[Service]
 	Type=oneshot
-	ExecStart=$PWD/rsyncbak
+	ExecStart=$PWD/rsync_backup
 EOF
 
 install -v /dev/stdin /etc/systemd/system/rsyncbak.timer <<-EOF
