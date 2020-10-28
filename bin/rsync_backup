@@ -9,16 +9,23 @@ source "etc/rsync_backup"
 remote="${dest%%:*}"
 dir="${dest#*:}"
 if [[ $dir != "" ]]; then
-    dir="$dir/"
+	dir="$dir/"
 fi
 
+mkdir -p log
+log="log/rsync_backup.$(TZ=UTC date +%Y-%m-%dT%H:%M:%SZ).log"
+
 bin/rsync-no-vanished \
-    -e 'ssh -oBatchMode=yes -oStrictHostKeyChecking=no -oConnectTimeout=10 -oConnectionAttempts=5' \
-    $rsync_opts \
-    -a --numeric-ids --rsync-path="rsync --fake-super" \
-    --delete --delete-excluded \
-    --one-file-system \
-    --exclude-from etc/rsync_exclude \
-    / "${dest}mirror/"
+	-e 'ssh -oBatchMode=yes -oStrictHostKeyChecking=no -oConnectTimeout=10 -oConnectionAttempts=5' \
+	$rsync_opts \
+	-av --numeric-ids --rsync-path="rsync --fake-super" \
+	--delete --delete-excluded \
+	--one-file-system \
+	--exclude-from etc/rsync_exclude \
+	/ "${dest}mirror/" 2>&1 |
+	grep -v ' is uptodate$' > "$log"
 
 ssh "$remote" "touch ${dir}mirror.ok"
+rsync "$log" "${dest}mirror.log"
+
+find log -name '*.log' -type f -mtime +7 -delete
