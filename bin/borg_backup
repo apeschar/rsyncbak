@@ -46,4 +46,10 @@ borg create \
 	/ \
 	2>&1 | bin/log borg_backup
 
+borg prune \
+	--keep-within=7d \
+	--keep-weekly=8 \
+	--prefix=daily- \
+	"$repo"
+
 ssh "$remote" "touch ${dir}borg.ok"
