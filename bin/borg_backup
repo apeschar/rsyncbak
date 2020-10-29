@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+source "etc/rsync_backup.defaults"
+source "etc/rsync_backup"
+
+remote="${dest%%:*}"
+dir="${dest#*:}"
+if [[ $dir != "" ]]; then
+	dir="$dir/"
+fi
+
+repo="$remote:${dir}borg"
+
+init=
+
+while [[ $# -gt 0 ]]; do
+	case $1 in
+		--init)
+			shift
+			init=1
+			;;
+		*)
+			echo "Usage: $0 [--init]" >&2
+			exit 1
+			;;
+	esac
+done
+
+export BORG_PASSPHRASE=
+
+if [[ $init -eq 1 ]]; then
+	borg init -e authenticated-blake2 "$repo"
+fi
+
+borg create \
+	--filter=AME \
+	--compression zstd \
+	--stats \
+	--one-file-system \
+	--list \
+	--exclude-from etc/rsync_exclude \
+	"$repo::daily-{now}" \
+	/ \
+	2>&1 | bin/log borg_backup
+
+ssh "$remote" "touch ${dir}borg.ok"
