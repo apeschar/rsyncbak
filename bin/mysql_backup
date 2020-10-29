@@ -6,46 +6,9 @@ app="$(dirname "$0")/.."
 source "$app/etc/rsync_backup.defaults"
 source "$app/etc/rsync_backup"
 
-export TMPDIR=/var/tmp
-
-available_space="$((`stat -f -c '%a*%S' "$TMPDIR"`/1024/1024))"
-buffer_size=$((available_space/100*80))
-
-if [[ $buffer_size -gt $((5*1024)) ]]; then
-    buffer_size=$((5*1024))
-fi
-
-if [[ $(uname -i) = i386 ]] && [[ $buffer_size -gt 2047 ]]; then
-    buffer_size=2047
-fi
-
-if command -v mbuffer &>/dev/null; then
-    if [[ -t 1 ]]; then
-        mbuffer_flags=""
-    else
-        mbuffer_flags="-q"
-    fi
-    buffer() {
-        mbuffer -m ${buffer_size}M -s 2M -t ${mbuffer_flags}
-    }
-elif command -v pv &>/dev/null; then
-    echo "Warning: mbuffer is missing, falling back to pv" >&2
-    buffer() {
-        pv
-    }
-else
-    echo "Warning: mbuffer is missing, will not buffer transfer" >&2
-    buffer() {
-        cat
-    }
-fi
-
-if command -v pigz &>/dev/null; then
-    gzip() {
-        pigz "$@"
-    }
-else
-    echo "Install pigz to get faster compression..." >&2
+if ! command -v zstd &>/dev/null; then
+	echo "Please install zstd" >&2
+	exit 1
 fi
 
 fail=0
@@ -53,67 +16,73 @@ fail=0
 remote="${dest%%:*}"
 dir="${dest#*:}"
 if [[ $dir != "" ]]; then
-    dir="$dir/"
+	dir="$dir/"
 fi
-
-IFS=$'\n' dbs=($(mysql -e 'show databases' --skip-column-names))
 
 ssh_tmp="$(mktemp -d)"
 ssh_socket="$ssh_tmp/conn"
 
 _ssh() {
-    ssh \
-        -o ConnectTimeout=10 \
-        -o ConnectionAttempts=5 \
-        -o ControlMaster=auto \
-        -o ControlPath="$ssh_socket" \
-        -o BatchMode=yes \
-        -o StrictHostKeyChecking=no \
-        "$@"
+	ssh \
+		-o ConnectTimeout=10 \
+		-o ConnectionAttempts=5 \
+		-o ControlMaster=auto \
+		-o ControlPath="$ssh_socket" \
+		-o BatchMode=yes \
+		-o StrictHostKeyChecking=no \
+		"$@"
 }
 
 cleanup() {
-    pkill -f "$ssh_socket" &>/dev/null || true
-    fuser -k "$ssh_socket" &>/dev/null || true
-    rm -f "$ssh_socket" || true
-    rmdir "$ssh_tmp" || true
+	pkill -f "$ssh_socket" &>/dev/null || true
+	fuser -k "$ssh_socket" &>/dev/null || true
+	rm -f "$ssh_socket" || true
+	rmdir "$ssh_tmp" || true
 }
 trap cleanup EXIT
 
 tries=3
 while ! _ssh -f -N "$remote"; do
-    if [[ $((--tries)) -le 0 ]]; then
-        exit 1
-    fi
-    sleep 60
+	if [[ $((--tries)) -le 0 ]]; then
+		exit 1
+	fi
+	sleep 60
 done
+
+IFS=$'\n' dbs=($(mysql -Ne 'SHOW DATABASES'))
+
+zstd_options=()
+if [[ -t 2 ]]; then
+	zstd_options+=( -v )
+fi
 
 _ssh "$remote" "$(printf 'mkdir -p %q' "${dir}mysql")"
 
 for db in "${dbs[@]}"; do
-    [[ $db = "performance_schema" ]] && continue
-    [[ $db = "information_schema" ]] && continue
-    path="${dir}mysql/${db}.sql.gz"
-    tmp="${path}.$$.tmp"
-    if [[ -t 1 ]]; then
-        echo "$db" >&2
-    fi
-    if mysqldump --single-transaction --routines --events --no-autocommit "$db" |
-       gzip | buffer | _ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"
-    then
-        if _ssh "$remote" "$(printf 'mv %q %q' "$tmp" "$path")"; then
-            continue
-        fi
-    fi
-    _ssh "$remote" "$(printf 'rm -f %q' "$tmp")" || true
-    fail=1
+	[[ $db = "performance_schema" ]] && continue
+	[[ $db = "information_schema" ]] && continue
+	path="${dir}mysql/${db}.sql.zstd"
+	tmp="${path}.$$.tmp"
+	if [[ -t 2 ]]; then
+		echo "$db" >&2
+	fi
+	if mysqldump --single-transaction --routines --events --no-autocommit "$db" |
+	   zstd --adapt "${zstd_options[@]}" |
+	   _ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"
+	then
+		if _ssh "$remote" "$(printf 'mv %q %q' "$tmp" "$path")"; then
+			continue
+		fi
+	fi
+	_ssh "$remote" "$(printf 'rm -f %q' "$tmp")" || true
+	fail=1
 done
 
 if [[ $fail -eq 0 ]]; then
-    _ssh "$remote" "$(printf 'touch %q' "${dir}mysql.ok")" || fail=1
-    _ssh "$remote" "$(printf 'find %q -maxdepth 1 -type f -name "*.tmp" -mmin +1440 -delete' "${dir}mysql")" || fail=1
+	_ssh "$remote" "$(printf 'touch %q' "${dir}mysql.ok")" || fail=1
+	_ssh "$remote" "$(printf 'find %q -maxdepth 1 -type f -name "*.tmp" -mmin +1440 -delete' "${dir}mysql")" || fail=1
 fi
 
 if [[ $fail -eq 1 ]]; then
-    exit 1
+	exit 1
 fi
