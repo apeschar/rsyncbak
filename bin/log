@@ -23,6 +23,8 @@ tee_tty() {
 	fi
 }
 
+mkdir -p log
+
 tee_tty | gzip > "$file"
 
 rsync "$file" "$remote:$name.log.gz"
