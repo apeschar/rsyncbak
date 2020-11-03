@@ -51,7 +51,7 @@ done
 
 IFS=$'\n' dbs=($(mysql -Ne 'SHOW DATABASES'))
 
-zstd_options=()
+zstd_options=( --adapt )
 if [[ -t 2 ]]; then
 	zstd_options+=( -v )
 fi
@@ -67,7 +67,7 @@ for db in "${dbs[@]}"; do
 		echo "$db" >&2
 	fi
 	if mysqldump --single-transaction --routines --events --no-autocommit "$db" |
-	   zstd --adapt "${zstd_options[@]}" |
+	   zstd "${zstd_options[@]}" |
 	   _ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"
 	then
 		if _ssh "$remote" "$(printf 'mv %q %q' "$tmp" "$path")"; then
