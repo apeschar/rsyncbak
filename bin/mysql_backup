@@ -56,6 +56,14 @@ if [[ -t 2 ]]; then
 	zstd_options+=( -v )
 fi
 
+configure_mysql_timeout() {
+	if [[ $(mysql -Ne "SELECT @@$1 < $2") = 1 ]]; then
+		mysql -e "SET GLOBAL $1 = $2;"
+	fi
+}
+configure_mysql_timeout net_read_timeout 600
+configure_mysql_timeout net_write_timeout 600
+
 _ssh "$remote" "$(printf 'mkdir -p %q' "${dir}mysql")"
 
 for db in "${dbs[@]}"; do
