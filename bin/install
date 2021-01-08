@@ -3,13 +3,13 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-install -v /dev/stdin /etc/systemd/system/rsyncbak.service <<-EOF
+install -v /dev/stdin /etc/systemd/system/borg-backup.service <<-EOF
 	[Service]
 	Type=oneshot
-	ExecStart=$PWD/rsync_backup
+	ExecStart=$PWD/borg_backup
 EOF
 
-install -v /dev/stdin /etc/systemd/system/rsyncbak.timer <<-EOF
+install -v /dev/stdin /etc/systemd/system/borg-backup.timer <<-EOF
 	[Timer]
 	OnCalendar=daily
 	RandomizedDelaySec=4h
@@ -19,6 +19,6 @@ install -v /dev/stdin /etc/systemd/system/rsyncbak.timer <<-EOF
 EOF
 
 systemctl daemon-reload
-systemctl enable rsyncbak.timer
-systemctl restart rsyncbak.timer
-systemctl status rsyncbak.timer
+systemctl enable borg-backup.timer
+systemctl restart borg-backup.timer
+systemctl status borg-backup.timer
