@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+app="$(dirname "$0")/.."
+
+source "$app/etc/rsync_backup.defaults"
+source "$app/etc/rsync_backup"
+
+if ! command -v zstd &>/dev/null; then
+	echo "Please install zstd" >&2
+	exit 1
+fi
+
+fail=0
+
+remote="${dest%%:*}"
+dir="${dest#*:}"
+if [[ $dir != "" ]]; then
+	dir="$dir/"
+fi
+
+zstd_options=( --adapt )
+if [[ -t 2 ]]; then
+	zstd_options+=( -v )
+fi
+
+cd /
+
+path="${dir}pg_dumpall.zstd"
+tmp="$path.$$.tmp"
+
+ret=1
+if sudo -u postgres pg_dumpall |
+	zstd "${zstd_options[@]}" |
+	ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"
+then
+	if ssh "$remote" "$(printf 'mv %q %q' "$tmp" "$path")"; then
+		ret=0
+	fi
+fi
+
+ssh "$remote" "$(printf 'rm -f %q' "$tmp")" || true
+
+if [[ $ret -eq 0 ]]; then
+	ssh "$remote" "$(printf 'touch %q' "${dir}postgres.ok")" || ret=1
+fi
+
+exit "$ret"
