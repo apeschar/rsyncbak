@@ -34,6 +34,15 @@ install_service() {
 	systemctl status $service_name.timer
 }
 
+ensure_command() {
+	local command="$1"
+	local package="${2:-$1}"
+
+	if ! command -v "$command" &>/dev/null; then
+		apt-get install -t "$(lsb_release -cs)-backports" "$package"
+	fi
+}
+
 ret=0
 
 while [[ $# -gt 0 ]]; do
@@ -41,8 +50,10 @@ while [[ $# -gt 0 ]]; do
 	shift
 
 	if [[ $service = borg ]]; then
+		ensure_command borg borgbackup
 		install_service borg-backup borg_backup
 	elif [[ $service = mysql ]]; then
+		ensure_command zstd
 		install_service mysql-backup mysql_backup
 	else
 		echo "Unknown service: $service" >&2
