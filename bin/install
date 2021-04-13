@@ -3,22 +3,51 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-install -v /dev/stdin /etc/systemd/system/borg-backup.service <<-EOF
-	[Service]
-	Type=oneshot
-	ExecStart=$PWD/borg_backup
-EOF
+if [[ $# -eq 0 ]]; then
+	echo "Usage: SERVICE ..." >&2
+	echo "Where SERVICE is one of: borg mysql" >&2
+	exit 1
+fi
 
-install -v /dev/stdin /etc/systemd/system/borg-backup.timer <<-EOF
-	[Timer]
-	OnCalendar=daily
-	RandomizedDelaySec=4h
+install_service() {
+	local service_name="$1"
+	local command="$2"
 
-	[Install]
-	WantedBy=timers.target
-EOF
+	install -v /dev/stdin /etc/systemd/system/$service_name.service <<-EOF
+		[Service]
+		Type=oneshot
+		ExecStart=$PWD/$command
+	EOF
 
-systemctl daemon-reload
-systemctl enable borg-backup.timer
-systemctl restart borg-backup.timer
-systemctl status borg-backup.timer
+	install -v /dev/stdin /etc/systemd/system/$service_name.timer <<-EOF
+		[Timer]
+		OnCalendar=daily
+		RandomizedDelaySec=4h
+
+		[Install]
+		WantedBy=timers.target
+	EOF
+
+	systemctl daemon-reload
+	systemctl enable $service_name.timer
+	systemctl restart $service_name.timer
+	systemctl status $service_name.timer
+}
+
+ret=0
+
+while [[ $# -gt 0 ]]; do
+	service="$1"
+	shift
+
+	if [[ $service = borg ]]; then
+		install_service borg-backup borg_backup
+	elif [[ $service = mysql ]]; then
+		install_service mysql-backup mysql_backup
+	else
+		echo "Unknown service: $service" >&2
+		ret=1
+	fi
+done
+
+exit $ret
