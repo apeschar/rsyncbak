@@ -44,11 +44,11 @@ ensure_command() {
 }
 
 install_borg_mount() {
-	remote="$(source ../etc/rsync_backup && echo "$dest")"
+	dest="$(source ../etc/rsync_backup && echo "$dest")"
 
 	install -v /dev/stdin /etc/systemd/system/root-borg.mount <<-EOF
 		[Mount]
-		Environment=$remote:borg
+		Environment=BORG_REPO=${dest}borg
 		What=::
 		Where=/root/borg
 		Type=fuse.borgfs
