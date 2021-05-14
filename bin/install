@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 
 if [[ $# -eq 0 ]]; then
 	echo "Usage: SERVICE ..." >&2
-	echo "Where SERVICE is one of: borg mysql" >&2
+	echo "Where SERVICE is one of: borg mysql borg-mount" >&2
 	exit 1
 fi
 
@@ -43,6 +43,31 @@ ensure_command() {
 	fi
 }
 
+install_borg_mount() {
+	remote="$(source ../etc/rsync_backup && echo "$dest")"
+
+	install -v /dev/stdin /etc/systemd/system/root-borg.mount <<-EOF
+		[Mount]
+		Environment=$remote:borg
+		What=::
+		Where=/root/borg
+		Type=fuse.borgfs
+	EOF
+
+	install -v /dev/stdin /etc/systemd/system/root-borg.automount <<-EOF
+		[Automount]
+		Where=/root/borg
+		TimeoutIdleSec=1h
+
+		[Install]
+		WantedBy=multi-user.target
+	EOF
+
+	systemctl enable root-borg.automount
+	mkdir -p /root/borg
+	systemctl start root-borg.automount
+}
+
 ret=0
 
 while [[ $# -gt 0 ]]; do
@@ -55,6 +80,9 @@ while [[ $# -gt 0 ]]; do
 	elif [[ $service = mysql ]]; then
 		ensure_command zstd
 		install_service mysql-backup mysql_backup
+	elif [[ $service = "borg-mount" ]]; then
+		ensure_command borg borgbackup
+		install_borg_mount
 	else
 		echo "Unknown service: $service" >&2
 		ret=1
