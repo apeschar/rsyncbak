@@ -11,6 +11,10 @@ if ! command -v zstd &>/dev/null; then
 	exit 1
 fi
 
+if [[ ! ${HOME+x} ]]; then
+	export HOME=~
+fi
+
 fail=0
 
 remote="${dest%%:*}"
