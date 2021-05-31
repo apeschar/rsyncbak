@@ -43,8 +43,7 @@ borg create \
 	--list \
 	--exclude-from etc/rsync_exclude \
 	"$repo::daily-{now}" \
-	/ \
-	2>&1 | bin/log borg_backup
+	/
 
 borg prune \
 	--keep-within=7d \
