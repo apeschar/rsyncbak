@@ -33,6 +33,8 @@ export BORG_PASSPHRASE=
 
 if [[ $init -eq 1 ]]; then
 	borg init -e authenticated-blake2 "$repo"
+	echo "Repo initalized. Rerun this command without --init or use the systemd unit." >&2
+	exit 0
 fi
 
 borg create \
