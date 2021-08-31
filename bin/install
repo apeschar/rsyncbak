@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 
 if [[ $# -eq 0 ]]; then
 	echo "Usage: SERVICE ..." >&2
-	echo "Where SERVICE is one of: borg mysql borg-mount" >&2
+	echo "Where SERVICE is one of: borg mysql borg-mount rsync" >&2
 	exit 1
 fi
 
@@ -83,6 +83,8 @@ while [[ $# -gt 0 ]]; do
 	elif [[ $service = "borg-mount" ]]; then
 		ensure_command borg borgbackup
 		install_borg_mount
+	elif [[ $service = rsync ]]; then
+		install_service rsync-backup rsync_backup
 	else
 		echo "Unknown service: $service" >&2
 		ret=1
