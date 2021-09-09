@@ -30,6 +30,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 export BORG_PASSPHRASE=
+export BORG_REMOTE_PATH=borg1
 
 if [[ $init -eq 1 ]]; then
 	borg init -e authenticated-blake2 "$repo"
