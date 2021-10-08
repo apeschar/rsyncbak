@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 
 source "etc/rsync_backup.defaults"
 source "etc/rsync_backup"
+source "lib/functions"
 
 remote="${dest%%:*}"
 dir="${dest#*:}"
@@ -29,12 +30,12 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-export BORG_PASSPHRASE=
-export BORG_REMOTE_PATH=borg1
+borg_vars
 
 if [[ $init -eq 1 ]]; then
-	borg init -e authenticated-blake2 "$repo"
-	echo "Repo initalized. Rerun this command without --init or use the systemd unit." >&2
+	borg_init "$repo"
+	echo "Repo initialized with mode ${mode}." >&2
+	echo "Rerun this command without --init or use the systemd unit." >&2
 	exit 0
 fi
 

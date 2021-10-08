@@ -1,0 +1,18 @@
+borg_vars() {
+	if [[ ! ${BORG_PASSPHRASE+x} ]]; then
+		BORG_PASSPHRASE=
+	fi
+	export BORG_PASSPHRASE
+	export BORG_REMOTE_PATH=borg1
+}
+
+borg_init() {
+	local repo="$1"
+	local mode
+	if [[ $BORG_PASSPHRASE ]]; then
+		mode=repokey-blake2
+	else
+		mode=authenticated-blake2
+	fi
+	borg init -e "$mode" "$repo"
+}

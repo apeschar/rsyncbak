@@ -3,13 +3,11 @@
 set -euo pipefail
 app="$(dirname "$0")/.."
 
+umask 0077
+
 source "$app/etc/rsync_backup.defaults"
 source "$app/etc/rsync_backup"
-
-if ! command -v zstd &>/dev/null; then
-	echo "Please install zstd" >&2
-	exit 1
-fi
+source "$app/lib/functions"
 
 if [[ ! ${HOME+x} ]]; then
 	export HOME=~
@@ -32,6 +30,7 @@ _ssh() {
 		-o ConnectionAttempts=5 \
 		-o ControlMaster=auto \
 		-o ControlPath="$ssh_socket" \
+		-o ControlPersist=10 \
 		-o BatchMode=yes \
 		-o StrictHostKeyChecking=no \
 		"$@"
@@ -46,7 +45,7 @@ cleanup() {
 trap cleanup EXIT
 
 tries=3
-while ! _ssh -f -N "$remote"; do
+while ! _ssh "$remote" ls >/dev/null; do
 	if [[ $((--tries)) -le 0 ]]; then
 		exit 1
 	fi
@@ -54,11 +53,6 @@ while ! _ssh -f -N "$remote"; do
 done
 
 IFS=$'\n' dbs=($(mysql -Ne 'SHOW DATABASES'))
-
-zstd_options=( --adapt )
-if [[ -t 2 ]]; then
-	zstd_options+=( -v )
-fi
 
 configure_mysql_timeout() {
 	if [[ $(mysql -Ne "SELECT @@$1 < $2") = 1 ]]; then
@@ -68,31 +62,94 @@ configure_mysql_timeout() {
 configure_mysql_timeout net_read_timeout 600
 configure_mysql_timeout net_write_timeout 600
 
-_ssh "$remote" "$(printf 'mkdir -p %q' "${dir}mysql")"
+if [[ ! ${mysql_backup_method+x} ]] || [[ $mysql_backup_method = dump ]]; then
+	if ! command -v zstd &>/dev/null; then
+		echo "Please install zstd" >&2
+		exit 1
+	fi
+	pre() {
+		_ssh "$remote" "$(printf 'mkdir -p %q' "${dir}mysql")"
+	}
+	write_db() {
+		local db="$1"
+		local path="${dir}mysql/${db}.sql.zstd"
+		local tmp="${path}.$$.tmp"
 
+		local zstd_options=( --adapt )
+		if [[ -t 2 ]]; then
+			zstd_options+=( -v )
+		fi
+
+		if zstd "${zstd_options[@]}" | _ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"; then
+			if _ssh "$remote" "$(printf 'mv %q %q' "$tmp" "$path")"; then
+				return 0
+			fi
+		fi
+
+		_ssh "$remote" "$(printf 'rm -f %q' "$tmp")" || true
+
+		return 1
+	}
+	post() {
+		_ssh "$remote" "$(printf 'find %q -maxdepth 1 -type f \( -name "*.tmp" -or -name "*.gz" \) -mmin +1440 -delete' "${dir}mysql")"
+	}
+elif [[ $mysql_backup_method = borg ]]; then
+	borg_vars
+
+	borg_repo="$remote:${dir}mysql_borg"
+	tmp_dir="/var/tmp/rsyncbak/mysql"
+
+	mkdir -p "${tmp_dir}"
+	chown $USER:$USER "${tmp_dir}"
+	chmod 700 "${tmp_dir}"
+
+	pre() {
+		if ! _ssh "$remote" "$(printf 'ls %q' "${dir}mysql_borg")" >/dev/null; then
+			borg_init "$borg_repo"
+		fi
+	}
+	write_db() {
+		local db="$1"
+		local status
+		if
+			pv -N "dump $db" | gzip > "$tmp_dir/dbdump" &&
+			pv -N "upload $db" < "$tmp_dir/dbdump" |
+				gzip -d |
+				borg create --stdin-name "$db.sql" --compression zstd --stats "$borg_repo::$db-{utcnow}" -
+		then
+			status=0
+		else
+			status=1
+		fi
+		rm -f "$tmp_dir/dbdump" || true
+		return "${status}"
+	}
+	post() {
+		borg prune \
+			--keep-within=7d \
+			--keep-weekly=8 \
+			"$borg_repo"
+	}
+fi
+
+pre
 for db in "${dbs[@]}"; do
 	[[ $db = "performance_schema" ]] && continue
 	[[ $db = "information_schema" ]] && continue
-	path="${dir}mysql/${db}.sql.zstd"
-	tmp="${path}.$$.tmp"
 	if [[ -t 2 ]]; then
 		echo "$db" >&2
 	fi
-	if mysqldump --single-transaction --routines --events --no-autocommit "$db" |
-	   zstd "${zstd_options[@]}" |
-	   _ssh "$remote" "$(printf 'dd of=%q status=none' "$tmp")"
-	then
-		if _ssh "$remote" "$(printf 'mv %q %q' "$tmp" "$path")"; then
-			continue
-		fi
+	if mysqldump --single-transaction --routines --events --no-autocommit "$db" | write_db "$db"; then
+				continue
 	fi
-	_ssh "$remote" "$(printf 'rm -f %q' "$tmp")" || true
 	fail=1
 done
+if ! post; then
+	fail=1
+fi
 
 if [[ $fail -eq 0 ]]; then
 	_ssh "$remote" "$(printf 'touch %q' "${dir}mysql.ok")" || fail=1
-	_ssh "$remote" "$(printf 'find %q -maxdepth 1 -type f \( -name "*.tmp" -or -name "*.gz" \) -mmin +1440 -delete' "${dir}mysql")" || fail=1
 fi
 
 if [[ $fail -eq 1 ]]; then
