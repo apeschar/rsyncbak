@@ -100,7 +100,7 @@ elif [[ $mysql_backup_method = borg ]]; then
 	tmp_dir="/var/tmp/rsyncbak/mysql"
 
 	mkdir -p "${tmp_dir}"
-	chown $USER:$USER "${tmp_dir}"
+        chown "$(whoami):$(whoami)" "${tmp_dir}"
 	chmod 700 "${tmp_dir}"
 
 	pre() {
