@@ -42,7 +42,7 @@ def all_databases():
 
 def backup(db, *, command):
     say("+ %s" % db)
-    mysqldump = subprocess.Popen(
+    with subprocess.Popen(
         [
             "mysqldump",
             "--single-transaction",
@@ -53,19 +53,12 @@ def backup(db, *, command):
         ],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
-    )
-    dest = subprocess.Popen(
-        interpolate_command(db, command),
-        stdin=mysqldump.stdout,
-    )
-    try:
-        dest.wait(timeout=3600)
-    except:
-        dest.terminate()
-        raise
-    if dest.returncode:
-        raise RuntimeError(
-            "destination command failed with status %d" % dest.returncode
+    ) as mysqldump:
+        subprocess.run(
+            interpolate_command(db, command),
+            stdin=mysqldump.stdout,
+            check=True,
+            timeout=3600,
         )
     try:
         mysqldump.wait(timeout=10)
