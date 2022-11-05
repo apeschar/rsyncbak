@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+# pylint: disable=consider-using-f-string
+# pylint: disable=invalid-name
+# pylint: disable=missing-function-docstring
+# pylint: disable=missing-module-docstring
+
+import subprocess
+import sys
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+parser.add_argument("-e", "--exclude", default=[], action="append")
+parser.add_argument("command", nargs="+")
+
+
+def main(args):
+    errors = 0
+    for db in databases_for_backup(exclude=args.exclude):
+        try:
+            backup(db, command=args.command)
+        except Exception as e:
+            say("Could not back up database %s due to %r: %s" % (db, e, e))
+            errors += 1
+    if errors:
+        return 1
+    return 0
+
+
+def databases_for_backup(*, exclude):
+    exclude = set(v.casefold() for v in exclude)
+    exclude |= {"information_schema", "performance_schema"}
+    return (db for db in all_databases() if db.casefold() not in exclude)
+
+
+def all_databases():
+    return subprocess.check_output(
+        ["mysql", "-Ne", "SHOW DATABASES"],
+        input="",
+        encoding="utf-8",
+    ).splitlines()
+
+
+def backup(db, *, command):
+    with subprocess.Popen(
+        [
+            "mysqldump",
+            "--single-transaction",
+            "--routines",
+            "--events",
+            "--no-autocommit",
+            db,
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+    ) as mysqldump, subprocess.Popen(
+        interpolate_command(db, command),
+        stdin=mysqldump.stdout,
+    ) as dest:
+        try:
+            dest.wait(timeout=3600)
+        except:
+            dest.terminate()
+            raise
+
+
+def interpolate_command(db, command):
+    return [v.replace("{}", db) for v in command]
+
+
+def say(message):
+    print(message, file=sys.stderr)
+
+
+if __name__ == "__main__":
+    sys.exit(main(parser.parse_args()))
