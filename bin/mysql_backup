@@ -139,8 +139,15 @@ for db in "${dbs[@]}"; do
 	if [[ -t 2 ]]; then
 		echo "$db" >&2
 	fi
-	if mysqldump --single-transaction --routines --events --no-autocommit "$db" | write_db "$db"; then
-				continue
+	if mysqldump \
+		--single-transaction \
+		--routines \
+		--events \
+		--no-autocommit \
+		--max-allowed-packet=512M \
+		"$db" | write_db "$db"
+	then
+		continue
 	fi
 	fail=1
 done

@@ -49,6 +49,7 @@ def backup(db, *, command):
             "--routines",
             "--events",
             "--no-autocommit",
+            "--max-allowed-packet=512M",
             db,
         ],
         stdin=subprocess.DEVNULL,
