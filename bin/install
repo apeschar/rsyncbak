@@ -13,13 +13,13 @@ install_service() {
 	local service_name="$1"
 	local command="$2"
 
-	install -v /dev/stdin /etc/systemd/system/$service_name.service <<-EOF
+	install -m0644 -v /dev/stdin /etc/systemd/system/$service_name.service <<-EOF
 		[Service]
 		Type=oneshot
 		ExecStart=$PWD/$command
 	EOF
 
-	install -v /dev/stdin /etc/systemd/system/$service_name.timer <<-EOF
+	install -m0644 -v /dev/stdin /etc/systemd/system/$service_name.timer <<-EOF
 		[Timer]
 		OnCalendar=daily
 		RandomizedDelaySec=4h
@@ -46,7 +46,7 @@ ensure_command() {
 install_borg_mount() {
 	dest="$(source ../etc/rsync_backup && echo "$dest")"
 
-	install -v /dev/stdin /etc/systemd/system/root-borg.mount <<-EOF
+	install -m0644 -v /dev/stdin /etc/systemd/system/root-borg.mount <<-EOF
 		[Mount]
 		Environment=BORG_REPO=${dest}borg
 		What=::
@@ -54,7 +54,7 @@ install_borg_mount() {
 		Type=fuse.borgfs
 	EOF
 
-	install -v /dev/stdin /etc/systemd/system/root-borg.automount <<-EOF
+	install -m0644 -v /dev/stdin /etc/systemd/system/root-borg.automount <<-EOF
 		[Automount]
 		Where=/root/borg
 		TimeoutIdleSec=1h
