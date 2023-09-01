@@ -4,20 +4,42 @@
 # pylint: disable=missing-function-docstring
 # pylint: disable=missing-module-docstring
 
+import re
+import shlex
 import subprocess
 import sys
 from argparse import ArgumentParser
+from fnmatch import fnmatch
 
-parser = ArgumentParser()
-parser.add_argument("-e", "--exclude", default=[], action="append")
-parser.add_argument("command", nargs="+")
+
+def get_parser():
+    parser = ArgumentParser()
+    parser.add_argument("-e", "--exclude", default=[], action="append")
+    parser.add_argument("-n", "--dry-run", action="store_true")
+    parser.add_argument(
+        "-E", "--exclude-table", default=[], action="append", type=excluded_table
+    )
+    parser.add_argument("command", nargs="+")
+    return parser
+
+
+def excluded_table(s):
+    m = re.fullmatch(r"([^.]*)\.([^.]*)", s)
+    if not m:
+        raise ValueError("Ignored tables should be specified as 'db.table'")
+    return m[1], m[2]
 
 
 def main(args):
     errors = 0
     for db in databases_for_backup(exclude=args.exclude):
         try:
-            backup(db, command=args.command)
+            backup(
+                db,
+                command=args.command,
+                dry_run=args.dry_run,
+                excluded_tables=args.exclude_table,
+            )
         except Exception as e:
             say("Could not back up database %s due to %r: %s" % (db, e, e))
             errors += 1
@@ -40,23 +62,31 @@ def all_databases():
     ).splitlines()
 
 
-def backup(db, *, command):
+def backup(db, *, command, dry_run, excluded_tables):
+    mysqldump_command = [
+        "mysqldump",
+        "--single-transaction",
+        "--routines",
+        "--events",
+        "--no-autocommit",
+        "--max-allowed-packet=512M",
+        *get_ignore_table_args(db, excluded_tables),
+        db,
+    ]
+    destination_command = interpolate_command(db, command)
+    if dry_run:
+        say(
+            "%s | %s" % (shlex.join(mysqldump_command), shlex.join(destination_command))
+        )
+        return
     say("+ %s" % db)
     with subprocess.Popen(
-        [
-            "mysqldump",
-            "--single-transaction",
-            "--routines",
-            "--events",
-            "--no-autocommit",
-            "--max-allowed-packet=512M",
-            db,
-        ],
+        mysqldump_command,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
     ) as mysqldump:
         subprocess.run(
-            interpolate_command(db, command),
+            destination_command,
             stdin=mysqldump.stdout,
             check=True,
             timeout=3600,
@@ -70,6 +100,28 @@ def backup(db, *, command):
         raise RuntimeError("mysqldump failed with status %d" % mysqldump.returncode)
 
 
+def get_ignore_table_args(db, ignored_tables):
+    ignored_tables = [t for d, t in ignored_tables if match_glob(d, db)]
+    if not ignored_tables:
+        return
+    for table in get_db_tables(db):
+        for table_glob in ignored_tables:
+            if match_glob(table_glob, table):
+                yield "--ignore-table=%s" % table
+
+
+def match_glob(p, s):
+    return fnmatch(s.casefold(), p.casefold())
+
+
+def get_db_tables(db):
+    return subprocess.check_output(
+        ["mysql", "-Ne", "SHOW TABLES", "--", db],
+        input="",
+        encoding="utf-8",
+    ).splitlines()
+
+
 def interpolate_command(db, command):
     return [v.replace("{}", db) for v in command]
 
@@ -80,4 +132,4 @@ def say(message):
 
 
 if __name__ == "__main__":
-    sys.exit(main(parser.parse_args()))
+    sys.exit(main(get_parser().parse_args()))
