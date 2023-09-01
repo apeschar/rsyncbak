@@ -28,7 +28,7 @@ def main(args):
 
 def databases_for_backup(*, exclude):
     exclude = set(v.casefold() for v in exclude)
-    exclude |= {"information_schema", "performance_schema"}
+    exclude |= {"information_schema", "performance_schema", "sys"}
     return (db for db in all_databases() if db.casefold() not in exclude)
 
 
