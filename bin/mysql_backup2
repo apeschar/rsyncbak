@@ -107,7 +107,7 @@ def get_ignore_table_args(db, ignored_tables):
     for table in get_db_tables(db):
         for table_glob in ignored_tables:
             if match_glob(table_glob, table):
-                yield "--ignore-table=%s" % table
+                yield "--ignore-table=%s.%s" % (db, table)
 
 
 def match_glob(p, s):
